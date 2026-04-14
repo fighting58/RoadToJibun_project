@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>도로명주소 변환 서비스</title>
+    <link rel="stylesheet" href="main.css">
+    <!-- SheetJS for Excel/CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>주소 자동 검색 서비스</h1>
+            <p class="subtitle">엑셀 파일을 업로드하고 도로명 주소를 지번주소로 변환하세요.</p>
+        </header>
+
+        <main>
+            <section class="glass-card" id="step1">
+                <label for="fileInput" class="upload-area">
+                    <i data-lucide="upload-cloud"></i>
+                    <h2>파일 업로드</h2>
+                    <p>CSV 또는 XLSX 파일을 여기로 드래그하거나 클릭하여 선택하세요.</p>
+                    <input type="file" id="fileInput" accept=".csv, .xlsx, .xls">
+                </label>
+                <p id="fileNameDisplay"
+                    style="margin-top: 1rem; text-align: center; color: var(--primary); font-weight: 500;"></p>
+            </section>
+
+            <section class="glass-card hidden" id="step2">
+                <div class="selection-group">
+                    <h2>도로명 주소 설정</h2>
+                    <div class="field-select">
+                        <label for="columnSelect">도로명 주소 필드 선택:</label>
+                        <select id="columnSelect">
+                            <option value="">필드를 선택해 주세요</option>
+                        </select>
+                        <button id="processBtn" class="btn">
+                            <i data-lucide="play"></i> 작업 시작
+                        </button>
+                    </div>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="progressStatus">준비 중...</p>
+                </div>
+            </section>
+
+            <section class="glass-card hidden" id="step3">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>결과 테이블</h2>
+                    <button id="downloadBtn" class="btn" style="background: var(--success);">
+                        <i data-lucide="download"></i> 결과 다운로드
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="resultTable">
+                        <thead>
+                            <tr id="tableHeader"></tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
