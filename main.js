@@ -1,23 +1,32 @@
 let rawData = [];
 let headers = [];
 let API_KEY = "";
+let startTime = 0;
+let timerInterval = null;
 
 // DOM Elements
 const fileInput = document.getElementById('fileInput');
 const columnSelect = document.getElementById('columnSelect');
 const processBtn = document.getElementById('processBtn');
-const progressContainer = document.getElementById('progressContainer');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+const sourceFileName = document.getElementById('sourceFileName');
+
+const pipelineSection = document.getElementById('pipelineSection');
 const progressFill = document.getElementById('progressFill');
-const progressStatus = document.getElementById('progressStatus');
+const progressPercent = document.getElementById('progressPercent');
+const processedText = document.getElementById('processedText');
+const timeElapsed = document.getElementById('timeElapsed');
+const timeRemaining = document.getElementById('timeRemaining');
+
 const tableHeader = document.getElementById('tableHeader');
 const tableBody = document.getElementById('tableBody');
-const step2 = document.getElementById('step2');
 const step3 = document.getElementById('step3');
 const downloadBtn = document.getElementById('downloadBtn');
 
 // Initial setup
 window.addEventListener('DOMContentLoaded', async () => {
     await loadConfig();
+    lucide.createIcons();
 });
 
 async function loadConfig() {
@@ -34,9 +43,8 @@ fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Display file name
-    const fileNameDisplay = document.getElementById('fileNameDisplay');
-    fileNameDisplay.textContent = `선택된 파일: ${file.name}`;
+    fileNameDisplay.textContent = file.name;
+    sourceFileName.textContent = `Source: ${file.name}`;
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -48,14 +56,14 @@ fileInput.addEventListener('change', (e) => {
         if (rawData.length > 0) {
             headers = Object.keys(rawData[0]);
             populateColumnSelect();
-            step2.classList.remove('hidden');
+            processBtn.disabled = false;
         }
     };
     reader.readAsArrayBuffer(file);
 });
 
 function populateColumnSelect() {
-    columnSelect.innerHTML = '<option value="">필드를 선택해 주세요</option>';
+    columnSelect.innerHTML = '<option value="">Select source field</option>';
     headers.forEach(header => {
         const option = document.createElement('option');
         option.value = header;
@@ -76,16 +84,38 @@ processBtn.addEventListener('click', async () => {
         return;
     }
 
+    // Start UI State
     processBtn.disabled = true;
-    progressContainer.style.display = 'block';
+    pipelineSection.classList.remove('hidden');
+    step3.classList.add('hidden');
     
+    // Generate Random Transaction ID
+    const trId = document.getElementById('transactionId');
+    if (trId) trId.textContent = Math.floor(Math.random() * 90000 + 10000);
+    
+    // Reset Stats
+    progressFill.style.width = '0%';
+    progressPercent.textContent = '0%';
+    startTime = Date.now();
+    startTimer();
+
     const results = [];
     const total = rawData.length;
 
     for (let i = 0; i < total; i++) {
         const address = rawData[i][selectedField];
-        progressStatus.textContent = `처리 중... (${i + 1} / ${total})`;
-        progressFill.style.width = `${((i + 1) / total) * 100}%`;
+        const currentCount = i + 1;
+        const percent = Math.floor((currentCount / total) * 100);
+        
+        processedText.textContent = `${currentCount.toLocaleString()}개의 데이터 처리 중...`;
+        progressPercent.textContent = `${percent}%`;
+        progressFill.style.width = `${percent}%`;
+
+        // Estimate time remaining
+        const elapsed = (Date.now() - startTime) / 1000;
+        const avgTime = elapsed / currentCount;
+        const remainingTime = avgTime * (total - currentCount);
+        timeRemaining.textContent = formatTime(remainingTime);
 
         if (address) {
             const apiResult = await fetchJuso(address);
@@ -102,14 +132,35 @@ processBtn.addEventListener('click', async () => {
             });
         }
         
-        // Small delay to respect API limits if needed
-        await new Promise(r => setTimeout(r, 100));
+        // Small delay
+        await new Promise(r => setTimeout(r, 50));
     }
 
+    stopTimer();
     displayResults(results);
     step3.classList.remove('hidden');
     processBtn.disabled = false;
 });
+
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        timeElapsed.textContent = formatTime(elapsed);
+    }, 1000);
+}
+
+function stopTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+}
+
+function formatTime(seconds) {
+    if (isNaN(seconds) || seconds < 0) return "--:--:--";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+}
 
 async function fetchJuso(keyword) {
     return new Promise((resolve) => {
@@ -128,16 +179,16 @@ async function fetchJuso(keyword) {
                     "##adminNm##": refined.adminDistrict,
                     "##jibun##": refined.jibun,
                     "##PNU##": pnu,
-                    "##status##": 'Success'
+                    "##status##": 'Validated'
                 });
             } else {
                 resolve({
-                    "##roadAddr##": "검색 실패",
+                    "##roadAddr##": "Search Failed",
                     "##jibunAddr##": "",
                     "##adminNm##": "",
                     "##jibun##": "",
                     "##PNU##": "",
-                    "##status##": 'Fail (' + data.results.common.errorMessage + ')'
+                    "##status##": 'Error'
                 });
             }
         };
@@ -166,16 +217,17 @@ function displayResults(results) {
         const tr = document.createElement('tr');
         resultHeaders.forEach(h => {
             const td = document.createElement('td');
-            td.textContent = row[h];
             if (h === '##status##') {
-                td.innerHTML = `<span class="status-badge ${row[h].startsWith('Success') ? 'status-success' : 'status-error'}">${row[h]}</span>`;
+                const statusClass = row[h] === 'Validated' ? 'success' : 'error';
+                td.innerHTML = `<span class="status-tag ${statusClass}">${row[h]}</span>`;
+            } else {
+                td.textContent = row[h];
             }
             tr.appendChild(td);
         });
         tableBody.appendChild(tr);
     });
 
-    // Store for download
     window.processResults = results;
 }
 
@@ -187,18 +239,11 @@ downloadBtn.addEventListener('click', () => {
     XLSX.writeFile(workbook, "juso_results.xlsx");
 });
 
-/**
- * 지번 정제 함수 (plans.md 가이드 준수)
- * 1. 행정구역과 지번 분리
- * 2. 기타주소 제거
- */
 function refineJibunData(first) {
-    // 1. 행정구역 구성 (시도 + 시군구 + 읍면동 + 리)
     const adminDistrict = [first.siNm, first.sggNm, first.emdNm, first.liNm]
         .filter(v => v && v.trim() !== "")
         .join(" ");
 
-    // 2. 지번 구성 (산여부 + 지번본번 + [-지번부번])
     const san = first.mtYn === '1' ? '산' : '';
     const main = first.lnbrMnnm || "";
     const sub = (first.lnbrSlno && first.lnbrSlno !== "0" && first.lnbrSlno !== "") ? `-${first.lnbrSlno}` : "";
@@ -210,10 +255,6 @@ function refineJibunData(first) {
     };
 }
 
-/**
- * PNU 생성 함수
- * admCd(10) + 지번구분(1) + 본번(4) + 부번(4)
- */
 function generatePNU(admCd, mtYn, mnnm, slno) {
     if (!admCd) return "";
     const landType = mtYn === '1' ? '2' : '1';
@@ -221,3 +262,4 @@ function generatePNU(admCd, mtYn, mnnm, slno) {
     const slnoStr = (slno || "0").padStart(4, '0');
     return admCd + landType + mnnmStr + slnoStr;
 }
+
